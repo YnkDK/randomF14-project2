@@ -19,3 +19,19 @@
 *.exe
 *.out
 *.app
+
+# Data files
+data1a
+data1b
+data2a
+data2b
+data3a
+data3b
+data4a
+data4b
+data5a
+data5b
+data6a
+data6b
+data7a
+data7b
