@@ -55,7 +55,7 @@ unsigned long evalPoly(	const char *content,
  * at most 16 bits, so each element in the multiset is represented
  * by at most b = 80*16 = 1280 bits and a multiset contains at most
  * n <= 2^24 lines this algorithm outputs correctly with probability
- * 1-2^-12.
+ * 1-n/2147483647
  *
  * @param[in]	argc	The number of command line arguments
  * @param[in]	argv	A pointer to an array of string where:
@@ -189,12 +189,15 @@ unsigned long setHashtable(unsigned long *hashtable) {
     return rand[0xFFFF];
 }
 
-inline unsigned long evalPoly(const char *content, const long numChar, const unsigned long w, const unsigned long *hashtable) {
-	unsigned long val = 1;	// Value of the polynomial
-	unsigned long h = 0;	// Accumulated value of h
-	unsigned int c1, c2;	// Temp. character 1 and 2
-	unsigned int tmp;		// Concatanation of c1 and c2
-	int i;					// Index variable
+inline unsigned long evalPoly(	const char *content,
+								const long numChar,
+								const unsigned long w,
+								const unsigned long *hashtable) {
+	unsigned long val = 1;	//!< Value of the polynomial
+	unsigned long h = 0;	//!< Accumulated value of h
+	unsigned int c1, c2;	//!< Temp. character 1 and 2
+	unsigned int tmp;		//!< Concatanation of c1 and c2
+	int i;					//!< Index variable
 	
 	
 	// Run through the content
