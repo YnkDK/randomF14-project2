@@ -30,7 +30,7 @@ void init_mt(char *seed);
  * @param[out]	hashtable	A memory location where 0xFFFF ulongs can be stored
  * @return A random number in the field (2^31 - 1), which can be used as w
  */
-unsigned long setHashtable(unsigned long *hashtable);
+void setA(unsigned long *a, unsigned long *w);
 
 /**
  * Evaluates the univariate polynomial (w-h(x_1))(w-h(x_2))***(w-h(x_n)),
@@ -42,10 +42,11 @@ unsigned long setHashtable(unsigned long *hashtable);
  * @param[in]	hashtable	Look-up table for a_i*x_i
  * @return	Value of (w-h(x_1))(w-h(x_2))***(w-h(x_n))
  */
-unsigned long evalPoly(	const char *content,
+void evalPoly(	char *content,
 						const long numChar,
-						const unsigned long w,
-						const unsigned long *hashtable);
+						const unsigned long *w,
+						const unsigned long *a,
+						unsigned long *val);
 
 
 /**
@@ -70,26 +71,24 @@ int main(int argc, char *argv[]) {
 	long fSize;					//!< file size (in bytes)
 	long numChar;				//!< number of chars in file
 	char *buffer1, *buffer2;	//!< buffer with the whole file
-	unsigned long *hashtable;	//!< mapping from 2^16 to Fp
-	unsigned long w;			//!< used to evaulate polynomial
-	unsigned long f1, f2;		//!< fingerprint of file 1 and 2
+	unsigned long a[2*80];		//!< mapping from 2^16 to Fp
+	unsigned long w[2];			//!< used to evaulate polynomial
+	unsigned long f1[2], f2[2];		//!< fingerprint of file 1 and 2
 	
-	/* Map from 2^16 to the field (2^31 - 1) */
-	hashtable = malloc(sizeof(unsigned long)*0xFFFF);
-		
 	/* INIT Mersenne Twister */
 	init_mt(argv[3]);
 	/* Initialize the hash table and set w */
-	w = setHashtable(hashtable);
-    
+	
+	setA(a, w);
+   
 	/* Open first file */
-	if((fp1 = fopen(argv[1], "rb")) == NULL) {
+	if((fp1 = fopen(argv[1], "r")) == NULL) {
 		fprintf(stderr, "Cannot open data-file-1\n");
 		exit(1);
 	}
 
 	/* Open second file */
-	if((fp2 = fopen(argv [2], "rb")) == NULL) {
+	if((fp2 = fopen(argv [2], "r")) == NULL) {
 		fprintf(stderr, "Cannot open data-file-2\n");
 		exit(1);
 	}
@@ -97,48 +96,37 @@ int main(int argc, char *argv[]) {
 	/* Get the file size (Assume they are equal) */
 	fseek(fp1, 0, SEEK_END);
 	fSize = ftell(fp1);
-	numChar = fSize/sizeof(char)+1;
+	numChar = fSize/sizeof(char);
 	rewind(fp1);
 	
 	/* Read both files to maximize the I/O performance */
-	buffer1 = (char *) malloc(sizeof(char)*fSize);
+	buffer1 = (char *) malloc(sizeof(char)*(fSize+1));
 	if(fread(buffer1, 1, fSize, fp1) != fSize) {
 		fprintf(stderr, "Could not read data-file-1\n");
 		exit(1);
 	}
+	buffer1[fSize] = '\0';
 	
-	buffer2 = (char *) malloc(sizeof(char)*fSize);
+	buffer2 = (char *) malloc(sizeof(char)*(fSize + 1));
 	if(fread(buffer2, 1, fSize, fp2) != fSize) {
 		fprintf(stderr, "Could not read data-file-1\n");
 		exit(1);
 	}
-	
+	buffer2[fSize] = '\0';
 	/* Close data files (We are done with them!) */
 	fclose(fp1);
 	fclose(fp2);
 	
 	/* Fingerprint of data-file-1 */
-	f1 = evalPoly(buffer1, numChar, w, hashtable);
+	evalPoly(buffer1, numChar, w, a, f1);
 	/* Fingerprint of data-file-1 */
-	f2 = evalPoly(buffer2, numChar, w, hashtable);
-
-	// If they are distinct - we belive it
-	if(f1-f2 != 0) {
-		printf("No");
-		return 0;
-	}
-	// Otherwise it might be a false positive
-	// and we make another run to decrease
-	// the probability for a flase positive
-	// (with a new set of a's and w)
-	w = setHashtable(hashtable);
-	/* Fingerprint of data-file-1 */
-	f1 = evalPoly(buffer1, numChar, w, hashtable);
-	/* Fingerprint of data-file-1 */
-	f2 = evalPoly(buffer2, numChar, w, hashtable);
+	evalPoly(buffer2, numChar, w, a, f2);
 	
-	/* Print the final result */
-	printf((f1-f2==0) ? "Yes" : "No");
+	if(((f1[0] - f2[0]) == 0) && ((f1[1] - f2[1]) == 0)) {
+		printf("Yes"); //<- With prob. 1-2^-12
+	} else {
+		printf("No");
+	}
 	
 	/* Cleanup */
 	free(buffer1);
@@ -165,63 +153,73 @@ inline void init_mt(char *seed) {
 	}
     // Init SFMT
     sfmt_init_by_array(&sfmt, init, 10);
+  
 }
 
-unsigned long setHashtable(unsigned long *hashtable) {
-	uint32_t *rand = malloc(sizeof(uint32_t)*(0xFFFF+1));
+void setA(unsigned long *a, unsigned long *w) {
+	int min = sfmt_get_min_array_size32(&sfmt);
+	int nRandom = 162; // 2*80 for the 'a' array and 2 for w
+	if(min > 162) {
+		nRandom = min;
+	}
+	uint32_t *rand = malloc(sizeof(uint32_t)*nRandom);
+	
     // Init rand with 65536 (0xFFFF+1) random numbers
     // For all a's and one for w
     // Note: This might not be in our field
-    sfmt_fill_array32(&sfmt, rand, 0xFFFF+1);
-    
+    sfmt_fill_array32(&sfmt, rand, nRandom);
+     
     // Compute a_i*x_i for all i
     // Due to the pigeon hole principle, for
     // n > 2^16 > 6.5*10^4 we would need to
     // do this multiplication at least once
     // anyway - So lets do it while the
     // memory is aligned
-    for(int i = 0; i < 0xFFFF; i++) {
+    for(int i = 0; i < 2*80; i++) {
     	// a_i = rand[i] % P
     	// x = i
-    	hashtable[i] = ((rand[i] % P) * i) % P;
+    	a[i] = rand[i] % P;
     }
 
-    return rand[0xFFFF];
+	w[0] = rand[2*80] % P;
+	w[1] = rand[2*80 + 1] % P;
 }
 
-inline unsigned long evalPoly(	const char *content,
+inline void evalPoly(	char *content,
 								const long numChar,
-								const unsigned long w,
-								const unsigned long *hashtable) {
-	unsigned long val = 1;	//!< Value of the polynomial
-	unsigned long h = 0;	//!< Accumulated value of h
-	unsigned int c1, c2;	//!< Temp. character 1 and 2
-	unsigned int tmp;		//!< Concatanation of c1 and c2
-	int i;					//!< Index variable
-	
-	
-	// Run through the content
-	for(i = 0; i <= numChar; i += 2) {
-		c1 = content[i] & 0xFF;
-		c2 = content[i+1] & 0xFF;
-		if(c1 != NEW_LINE && c2 != NEW_LINE) {
-			// Extract the next 16 bits
-			tmp = (c1 << 8) | c2;
-			h += hashtable[tmp];
-		} else {
-			if(c2 == NEW_LINE) {
-				// Take the last 8 bits
-				h += hashtable[c1];
-			} else {
-				// c2 is the first character in the next element
-				i--;
+								const unsigned long *w,
+								const unsigned long *a,
+								unsigned long *val) {
+	unsigned long h[2] = {0, 0};	//!< Accumulated value of h
+	unsigned long tmp;				//!< Concatanation of c1 and c2
+	int i, c;						//!< Index variable
+	char *line = malloc(sizeof(char)*161);
+	memset(line, '\0', sizeof(char)*161);
+	val[0] = 1;
+	val[1] = 1;
+		
+  	char * pch;
+  	pch = strtok (content,"\n");
+  	// For each line
+	while (pch != NULL) {
+		// Calclulate h(X)
+		for(c = 0; pch[c] != '\0'; c++) {
+			tmp = (pch[c] & 0xFF) << 8;
+			if(pch[c + 1] != '\0') {
+				c++;
+				tmp |= (pch[c] & 0xFF);
 			}
-			// h(x) is now fully calculated
-			// Note that w-h is within our field
-			val = ((w-h) * val) % P;
-			h = 0;
-			continue;
+			h[0] += (a[i    ] * tmp) % P;
+			h[1] += (a[i + 1] * tmp) % P;
 		}
-	}	
-	return val;
+		// Calculate f(X) (partial)
+    	val[0] = (abs(w[0]-h[0]) * val[0]) % P;
+    	val[1] = (abs(w[1]-h[1]) * val[1]) % P;
+    	// Reset counters
+    	h[0] = 0;
+    	h[1] = 0;
+    	i = 0;
+    	memset(line, '\0', sizeof(char)*161);
+    	pch = strtok (NULL, "\n");
+    }
 }
