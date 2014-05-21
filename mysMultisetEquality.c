@@ -21,26 +21,23 @@ void init_mt(char *seed);
 
 /**
  * Works as follows:
- * 	1. Generates 0xFFFF+1 random 32-bit numbers
- *	2. Maps these numbers to our field (2^31 - 1)
- *	3. Calculates a_i*x_i for i in [0..0xFFFF]
- *  4. Saves this in hashtable
- * Thus the hash table can be used to directly look-up a_i*x_i
+ * 	1. Generates 2*80 + 2 random numbers
+ *  2. Constructs 'a' such that it contains 2*80 random numbers in Fp
+ *  3. Sets w[0] and w[1] to be random numbers in Fp
  *
- * @param[out]	hashtable	A memory location where 0xFFFF ulongs can be stored
- * @return A random number in the field (2^31 - 1), which can be used as w
+ * @param[out]	a	List of 2*80 random numbers
+ * @param[out]	w	The two w-values used in f(w)
  */
 void setAW(unsigned long *a, unsigned long *w);
 
 /**
  * Evaluates the univariate polynomial (w-h(x_1))(w-h(x_2))***(w-h(x_n)),
- * and returns the value. 
+ * for both w[0] and w[1] and sets val[0] and val[1] accordingly 
  *
  * @param[in]	content		The content of a file (each line ends with '\n')
  * @param[in]	numChar		Number of characters in content
- * @param[in]	w			Variable for f(z)
- * @param[in]	hashtable	Look-up table for a_i*x_i
- * @return	Value of (w-h(x_1))(w-h(x_2))***(w-h(x_n))
+ * @param[in]	w			Variables for f(z), i.e. w[0] and w[1]
+ * @param[in]	a			A list of random numbers in Fp of size 2*80
  */
 void evalPoly(	const char *content,
 				const long numChar,
@@ -70,10 +67,10 @@ int main(int argc, char *argv[]) {
 	FILE *fp1, *fp2;			//!< file pointers
 	long fSize;					//!< file size (in bytes)
 	long numChar;				//!< number of chars in file
-	char *buffer;	//!< buffer with the whole file
+	char *buffer;				//!< buffer with the whole file
 	unsigned long a[2*80];		//!< mapping from 2^16 to Fp
 	unsigned long w[2];			//!< used to evaulate polynomial
-	unsigned long f1[2], f2[2];		//!< fingerprint of file 1 and 2
+	unsigned long f1[2], f2[2];	//!< fingerprint of file 1 and 2
 	
 	/* Initialize Mersenne Twister */
 	init_mt(argv[3]);
@@ -113,7 +110,7 @@ int main(int argc, char *argv[]) {
 	}
 	/* Read the whole file into (previus) buffer */
 	if(fread(buffer, sizeof(char), fSize, fp2) != fSize) {
-		fprintf(stderr, "Could not read data-file-1\n");
+		fprintf(stderr, "Could not read data-file-2\n");
 		exit(1);
 	}
 	/* Close the file */
@@ -162,30 +159,21 @@ inline void init_mt(char *seed) {
 }
 
 void setAW(unsigned long *a, unsigned long *w) {
-	int min = sfmt_get_min_array_size32(&sfmt);
-	int nRandom = 162; // 2*80 for the 'a' array and 2 for w
+	int min = sfmt_get_min_array_size32(&sfmt); //<- Min. size for rand
+	int nRandom = 162; //<- 2*80 for the 'a' array and 2 for w
 	if(min > 162) {
 		nRandom = min;
 	}
 	uint32_t *rand = malloc(sizeof(uint32_t)*nRandom);
 	
-	// Init rand with 65536 (0xFFFF+1) random numbers
-	// For all a's and one for w
-	// Note: This might not be in our field
+	/* Fill the array with 32-bit random uints */
 	sfmt_fill_array32(&sfmt, rand, nRandom);
 
-	// Compute a_i*x_i for all i
-	// Due to the pigeon hole principle, for
-	// n > 2^16 > 6.5*10^4 we would need to
-	// do this multiplication at least once
-	// anyway - So lets do it while the
-	// memory is aligned
+	/* Map the random integers to our field */
 	for(int i = 0; i < 2*80; i++) {
-		// a_i = rand[i] % P
-		// x = i
 		a[i] = rand[i] % P;
 	}
-
+	/* And set the w-values */
 	w[0] = rand[2*80] % P;
 	w[1] = rand[2*80 + 1] % P;
 }
@@ -198,28 +186,32 @@ inline void evalPoly(	const char *content,
 	unsigned long h[2] = {0, 0};	//!< Accumulated value of h
 	unsigned long tmp;				//!< Concatanation of c1 and c2
 	int i, c = 0;					//!< Index variable
-	val[0] = 1;
-	val[1] = 1;
-		
-	// For each line
+	unsigned long val0 = 1, val1 = 1; //<- Tmp. value of f1(w) and f2(w)
+	
+	/* Example string 0x6D7973 (mys in ASCII) */
 	while (c < numChar) {
-		// Calclulate h(X)
+		/* Calclulate h(X), i.e. a line */
 		for(/*  */; content[c] != '\n'; c++) {
+			/* tmp = 0x6D00\n */
 			tmp = (content[c] & 0xFF) << 8;
 			if(content[c + 1] != '\n') {
+				/* tmp = 0x6D79 */
 				c++;
 				tmp |= (content[c] & 0xFF);
 			}
 			h[0] += (a[i    ] * tmp) % P;
 			h[1] += (a[i + 1] * tmp) % P;
 		}
-		// Calculate f(X) (partial)
-		val[0] = (abs(w[0]-h[0]) * val[0]) % P;
-		val[1] = (abs(w[1]-h[1]) * val[1]) % P;
-		// Reset counters
+		/* Calculate f(X) (partial) */
+		val0 = (abs(w[0]-h[0]) * val0) % P;
+		val1 = (abs(w[1]-h[1]) * val1) % P;
+		/* Reset counters */
 		h[0] = 0;
 		h[1] = 0;
 		i = 0;
-		c++;
+		/* Skip the new line just seen */
+		c++; 
 	}
+	val[0] = val0;	//<- We are done, update the values
+	val[1] = val1;
 }
