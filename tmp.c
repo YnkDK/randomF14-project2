@@ -187,7 +187,7 @@ inline void evalPoly(	const unsigned char *content,
 	unsigned long tmp;				//!< Concatanation of c1 and c2
 	int i, c = 0;					//!< Index variable
 	unsigned long val0 = 1, val1 = 1; //<- Tmp. value of f1(w) and f2(w)
-
+	unsigned short *bit16;
 	/* Example string 0x6D7973 (mys in ASCII) */
 	while (c < numChar) {
 		/* Calclulate h(X), i.e. a line */
@@ -196,13 +196,16 @@ inline void evalPoly(	const unsigned char *content,
 			
 			if(content[c + 1] != '\n') {
 				/* tmp = 0x6D79 */
-				memcpy(&tmp, &content[c], 2);
+				bit16 = (unsigned short *) &content[c];
+				h[0] = (((a[i    ] * bit16[0]) % P) + h[0]) % P;
+				h[1] = (((a[i + 1] * bit16[0]) % P) + h[1]) % P;
 				c++;
 			} else {
 				tmp = (content[c]) << 8;
+				h[0] = (((a[i    ] * tmp) % P) + h[0]) % P;
+				h[1] = (((a[i + 1] * tmp) % P) + h[1]) % P;
 			}
-			h[0] = (((a[i    ] * tmp) % P) + h[0]) % P;
-			h[1] = (((a[i + 1] * tmp) % P) + h[1]) % P;
+
 			i += 2;
 		} 
 		/* Calculate f(X) (partial) */
