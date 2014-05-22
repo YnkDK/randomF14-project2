@@ -3,9 +3,9 @@
 #include "SFMT.h"
 
 #define NEW_LINE '\n'	//<- New line character
-#define P 2147483647	//!< 2^31 - 1 = 2147483647
-/* Maps a 64-bit unsigned int to the field P */
-#define field(x) (((x) >> 31) + ((x) & P))
+#define P 2147483647UL	//!< 2^31 - 1 = 2147483647
+/* Maps a 64-bit unsigned long to the field P */
+#define field(x) (x % P) //((((x) >> 31) + ((x) & P)))
 
 
 sfmt_t sfmt; //!< SIMD-oriented Fast Mersenne Twister
