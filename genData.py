@@ -9,7 +9,7 @@
 import string
 import random
 import sys
-random.seed("Martin Storgaard and Jon Bjerrum Jacobsen and Anders Strand-Holm Vinther")
+random.seed("Martin Storgaard and Jon Bjerrum Jacobsen and Anders Strand-Holm Vinther" + sys.argv[1] + sys.argv[2])
 
 ascii = string.digits + " " + string.letters + string.punctuation
 
