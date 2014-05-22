@@ -2,11 +2,13 @@
 #include <stdlib.h>
 #include "SFMT.h"
 
+#define NEW_LINE '\n'	//<- New line character
+#define P 2147483647	//!< 2^31 - 1 = 2147483647
+/* Maps a 64-bit unsigned int to the field P */
+#define field(x) (((x) >> 31) + ((x) & P))
 
-#define P 2147483647		//!< 2^31 - 1 = 2147483647
 
-const long NEW_LINE = '\n';	//!< '\n' = 10
-sfmt_t sfmt; 				//!< SIMD-oriented Fast Mersenne Twister
+sfmt_t sfmt; //!< SIMD-oriented Fast Mersenne Twister
 
 /**
  * Initilizes the Mersenne Twister with some truely random numbers,
@@ -169,11 +171,11 @@ void setAW(unsigned long *a, unsigned long *w) {
 
 	/* Map the random integers to our field */
 	for(int i = 0; i < 2*80; i++) {
-		a[i] = rand[i] % P;
+		a[i] = field(rand[i]);
 	}
 	/* And set the w-values */
-	w[0] = rand[2*80] % P;
-	w[1] = rand[2*80 + 1] % P;
+	w[0] = field(rand[2*80]);
+	w[1] = field(rand[2*80 + 1]);
 }
 
 inline void evalPoly(	const unsigned char *content,
@@ -182,28 +184,33 @@ inline void evalPoly(	const unsigned char *content,
 						const unsigned long *a,
 						unsigned long *val) {
 	unsigned long h[2] = {0, 0};	//!< Accumulated value of h
-	unsigned long tmp;				//!< Concatanation of c1 and c2
-	int i, c = 0;					//!< Index variable
-	unsigned long val0 = 1, val1 = 1; //<- Tmp. value of f1(w) and f2(w)
+	unsigned long s;				//!< Concatanation of c1 and c2 (block s)
+	int i = 0, c = 0;					//!< Index variable
+	unsigned long val0 = 1,val1 = 1;//<- Tmp. value of f1(w) and f2(w)
+	unsigned long tmp;				//<- Tmp. value of a*h and w-h
 	
 	/* Example string 0x6D7973 (mys in ASCII) */
 	while (c < numChar) {
 		/* Calclulate h(X), i.e. a line */
 		for(/*  */; content[c] != '\n'; c++) {
-			/* tmp = 0x6D00\n */
-			tmp = content[c] << 8;
+			/* setAW = 0x6D00\n */
+			s = content[c] << 8;
 			if(content[c + 1] != '\n') {
-				/* tmp = 0x6D79 */
+				/* s = 0x6D79 */
 				c++;
-				tmp |= content[c];
+				s |= content[c];
 			}
-			h[0] = (((a[i    ] * tmp) % P) + h[0]) % P;
-			h[1] = (((a[i + 1] * tmp) % P) + h[1]) % P;
+			tmp = a[i    ] * s;
+			h[0] = field(field(tmp) + h[0]);
+			tmp = a[i + 1] * s;
+			h[1] = field(field(tmp) + h[1]);
 			i += 2;
 		}
 		/* Calculate f(X) (partial) */
-		val0 = (abs(w[0]-h[0]) * val0) % P;
-		val1 = (abs(w[1]-h[1]) * val1) % P;
+		tmp = abs(w[0]-h[0]) * val0;
+		val0 = field(tmp);
+		tmp = abs(w[1]-h[1]) * val1;
+		val1 = field(tmp);
 		/* Reset counters */
 		h[0] = 0;
 		h[1] = 0;
