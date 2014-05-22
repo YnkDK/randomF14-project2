@@ -201,6 +201,7 @@ inline void evalPoly(	const char *content,
 			}
 			h[0] += (a[i    ] * tmp) % P;
 			h[1] += (a[i + 1] * tmp) % P;
+			i += 2;
 		}
 		/* Calculate f(X) (partial) */
 		val0 = (abs(w[0]-h[0]) * val0) % P;
