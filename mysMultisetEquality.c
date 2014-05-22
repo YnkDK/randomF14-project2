@@ -39,7 +39,7 @@ void setAW(unsigned long *a, unsigned long *w);
  * @param[in]	w			Variables for f(z), i.e. w[0] and w[1]
  * @param[in]	a			A list of random numbers in Fp of size 2*80
  */
-void evalPoly(	const char *content,
+void evalPoly(	const unsigned char *content,
 				const long numChar,
 				const unsigned long *w,
 				const unsigned long *a,
@@ -67,7 +67,7 @@ int main(int argc, char *argv[]) {
 	FILE *fp1, *fp2;			//!< file pointers
 	long fSize;					//!< file size (in bytes)
 	long numChar;				//!< number of chars in file
-	char *buffer;				//!< buffer with the whole file
+	unsigned char *buffer;				//!< buffer with the whole file
 	unsigned long a[2*80];		//!< mapping from 2^16 to Fp
 	unsigned long w[2];			//!< used to evaulate polynomial
 	unsigned long f1[2], f2[2];	//!< fingerprint of file 1 and 2
@@ -87,12 +87,12 @@ int main(int argc, char *argv[]) {
 	/* Get the file size */
 	fseek(fp1, 0, SEEK_END);
 	fSize = ftell(fp1);
-	numChar = fSize/sizeof(char);
+	numChar = fSize/sizeof(unsigned char);
 	rewind(fp1);
 	
 	/* Read the whole file into buffer */
-	buffer = (char *) malloc(sizeof(char)*(fSize));
-	if(fread(buffer, sizeof(char), fSize, fp1) != fSize) {
+	buffer = (unsigned char *) malloc(sizeof(unsigned char)*(fSize));
+	if(fread(buffer, sizeof(unsigned char), fSize, fp1) != fSize) {
 		fprintf(stderr, "Could not read data-file-1\n");
 		exit(1);
 	}
@@ -109,7 +109,7 @@ int main(int argc, char *argv[]) {
 		exit(1);
 	}
 	/* Read the whole file into (previus) buffer */
-	if(fread(buffer, sizeof(char), fSize, fp2) != fSize) {
+	if(fread(buffer, sizeof(unsigned char), fSize, fp2) != fSize) {
 		fprintf(stderr, "Could not read data-file-2\n");
 		exit(1);
 	}
@@ -178,7 +178,7 @@ void setAW(unsigned long *a, unsigned long *w) {
 	w[1] = rand[2*80 + 1] % P;
 }
 
-inline void evalPoly(	const char *content,
+inline void evalPoly(	const unsigned char *content,
 						const long numChar,
 						const unsigned long *w,
 						const unsigned long *a,
@@ -193,14 +193,14 @@ inline void evalPoly(	const char *content,
 		/* Calclulate h(X), i.e. a line */
 		for(/*  */; content[c] != '\n'; c++) {
 			/* tmp = 0x6D00\n */
-			tmp = (content[c] & 0xFF) << 8;
+			tmp = content[c] << 8;
 			if(content[c + 1] != '\n') {
 				/* tmp = 0x6D79 */
 				c++;
-				tmp |= (content[c] & 0xFF);
+				tmp |= content[c];
 			}
-			h[0] += (a[i    ] * tmp) % P;
-			h[1] += (a[i + 1] * tmp) % P;
+			h[0] = (((a[i    ] * tmp) % P) + h[0]) % P;
+			h[1] = (((a[i + 1] * tmp) % P) + h[1]) % P;
 			i += 2;
 		}
 		/* Calculate f(X) (partial) */
