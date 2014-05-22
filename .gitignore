@@ -35,3 +35,6 @@ data6a
 data6b
 data7a
 data7b
+
+# PDF files
+*.pdf
