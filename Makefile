@@ -16,3 +16,7 @@ MYS_TARGET = mysMultisetEquality
 mys: mysMultisetEquality.c SFMT.c SFMT.h SFMT-sse2.h \
 	SFMT-params19937.h
 	$(CC) $(CCFLAGS) $(SSE2FLAGS) -DSFMT_MEXP=19937 -o $@ SFMT.c mysMultisetEquality.c
+	
+tmp: tmp.c SFMT.c SFMT.h SFMT-sse2.h \
+	SFMT-params19937.h
+	$(CC) $(CCFLAGS) $(SSE2FLAGS) -DSFMT_MEXP=19937 -o $@ SFMT.c tmp.c
