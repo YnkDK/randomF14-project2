@@ -145,6 +145,9 @@ int main(int argc, char *argv[]) {
 }
 
 inline unsigned long field(unsigned long x) {
+	if(x == P) {
+		return 0;
+	}
 	unsigned long tmp = ((x) >> 31) + ((x) & P);
 	return ((tmp) >> 31) + ((tmp) & P);
 }
