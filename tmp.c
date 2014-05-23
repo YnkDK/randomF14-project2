@@ -1,14 +1,20 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
-#include <stdbool.h>
 #include "SFMT.h"
 
+#define NEW_LINE '\n'	//<- New line character
+#define P 2147483647UL	//!< 2^31 - 1 = 2147483647
 
-#define P 2147483647		//!< 2^31 - 1 = 2147483647
+sfmt_t sfmt; //!< SIMD-oriented Fast Mersenne Twister
 
-const long NEW_LINE = '\n';	//!< '\n' = 10
-sfmt_t sfmt; 				//!< SIMD-oriented Fast Mersenne Twister
+/**
+ * Maps a 64-bit unsigned long into the field P,
+ * or basicly returns x % P in a fancy way.
+ *
+ * @param[in]	x	A 64-bit unsigned long
+ * @return An unsigned long between 0 and P-1
+ */
+unsigned long field(unsigned long x);
 
 /**
  * Initilizes the Mersenne Twister with some truely random numbers,
@@ -87,12 +93,12 @@ int main(int argc, char *argv[]) {
 	/* Get the file size */
 	fseek(fp1, 0, SEEK_END);
 	fSize = ftell(fp1);
-	numChar = fSize/sizeof(char);
+	numChar = fSize/sizeof(unsigned char);
 	rewind(fp1);
 	
 	/* Read the whole file into buffer */
 	buffer = (unsigned char *) malloc(sizeof(unsigned char)*(fSize));
-	if(fread(buffer, sizeof(char), fSize, fp1) != fSize) {
+	if(fread(buffer, sizeof(unsigned char), fSize, fp1) != fSize) {
 		fprintf(stderr, "Could not read data-file-1\n");
 		exit(1);
 	}
@@ -138,6 +144,11 @@ int main(int argc, char *argv[]) {
 	return 0;
 }
 
+inline unsigned long field(unsigned long x) {
+	unsigned long tmp = ((x) >> 31) + ((x) & P);
+	return ((tmp) >> 31) + ((tmp) & P);
+}
+
 inline void init_mt(char *seed) {
 	char *pEnd; //!< Used to check if user seed is parsable
 	/* Seed from 
@@ -171,11 +182,11 @@ void setAW(unsigned long *a, unsigned long *w) {
 
 	/* Map the random integers to our field */
 	for(int i = 0; i < 2*80; i++) {
-		a[i] = rand[i] % P;
+		a[i] = field(rand[i]);
 	}
 	/* And set the w-values */
-	w[0] = rand[2*80] % P;
-	w[1] = rand[2*80 + 1] % P;
+	w[0] = field(rand[2*80]);
+	w[1] = field(rand[2*80 + 1]);
 }
 
 inline void evalPoly(	const unsigned char *content,
@@ -184,33 +195,35 @@ inline void evalPoly(	const unsigned char *content,
 						const unsigned long *a,
 						unsigned long *val) {
 	unsigned long h[2] = {0, 0};	//!< Accumulated value of h
-	unsigned long tmp;				//!< Concatanation of c1 and c2
-	int i, c = 0;					//!< Index variable
-	unsigned long val0 = 1, val1 = 1; //<- Tmp. value of f1(w) and f2(w)
-	unsigned short *bit16;
+	unsigned long s;				//!< Concatanation of c1 and c2 (block s)
+	int i = 0, c = 0;					//!< Index variable
+	unsigned long val0 = 1,val1 = 1;//<- Tmp. value of f1(w) and f2(w)
+	unsigned long tmp;				//<- Tmp. value of a*h and w-h
+	
 	/* Example string 0x6D7973 (mys in ASCII) */
 	while (c < numChar) {
 		/* Calclulate h(X), i.e. a line */
 		for(/*  */; content[c] != '\n'; c++) {
-			/* tmp = 0x6D00\n */
-			
+			/* setAW = 0x6D00\n */
+			s = content[c] << 8;
 			if(content[c + 1] != '\n') {
-				/* tmp = 0x6D79 */
-				bit16 = (unsigned short *) &content[c];
-				h[0] = (((a[i    ] * bit16[0]) % P) + h[0]) % P;
-				h[1] = (((a[i + 1] * bit16[0]) % P) + h[1]) % P;
+				/* s = 0x6D79 */
 				c++;
-			} else {
-				tmp = (content[c]) << 8;
-				h[0] = (((a[i    ] * tmp) % P) + h[0]) % P;
-				h[1] = (((a[i + 1] * tmp) % P) + h[1]) % P;
+				s |= content[c];
 			}
+			tmp = a[i    ] * s;
+			h[0] = field(field(tmp) + h[0]);
 
+			tmp = a[i + 1] * s;
+			h[1] = field(field(tmp) + h[1]);
 			i += 2;
-		} 
+		}
 		/* Calculate f(X) (partial) */
-		val0 = (abs(w[0]-h[0]) * val0) % P;
-		val1 = (abs(w[1]-h[1]) * val1) % P;
+		tmp = abs(w[0]-h[0]) * val0;
+		val0 = field(tmp);
+		tmp = abs(w[1]-h[1]) * val1;
+		val1 = field(tmp);
+
 		/* Reset counters */
 		h[0] = 0;
 		h[1] = 0;
