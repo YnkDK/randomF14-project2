@@ -4,11 +4,14 @@
 
 #define NEW_LINE '\n'	//<- New line character
 #define P 2147483647UL	//!< 2^31 - 1 = 2147483647
-/* Maps a 64-bit unsigned long to the field P */
-#define field(x) (x % P) //((((x) >> 31) + ((x) & P)))
 
 
 sfmt_t sfmt; //!< SIMD-oriented Fast Mersenne Twister
+
+unsigned long field(const unsigned long x) {
+	unsigned long tmp = (x >> 31) + (x & P);
+	return (tmp < P) ? tmp : tmp - P;
+} 
 
 /**
  * Initilizes the Mersenne Twister with some truely random numbers,
