@@ -76,10 +76,10 @@ int main(int argc, char *argv[]) {
 	unsigned long a[2*80];		//!< mapping from 2^16 to Fp
 	unsigned long w[2];			//!< used to evaulate polynomial
 	unsigned long f1[2], f2[2];	//!< fingerprint of file 1 and 2
-	
+
 	/* Initialize Mersenne Twister */
 	init_mt(argv[3]);
-	
+
 	/* Initialize a and w */
 	setAW(a, w);
 
@@ -88,26 +88,26 @@ int main(int argc, char *argv[]) {
 		fprintf(stderr, "Cannot open data-file-1\n");
 		exit(1);
 	}
-	
+
 	/* Get the file size */
 	fseek(fp1, 0, SEEK_END);
 	fSize = ftell(fp1);
 	numChar = fSize/sizeof(unsigned char);
 	rewind(fp1);
-	
+
 	/* Read the whole file into buffer */
 	buffer = (unsigned char *) malloc(sizeof(unsigned char)*(fSize));
 	if(fread(buffer, sizeof(unsigned char), fSize, fp1) != fSize) {
 		fprintf(stderr, "Could not read data-file-1\n");
 		exit(1);
 	}
-	
+
 	/* Close data files (We are done with them!) */
 	fclose(fp1);
-	
+
 	/* Fingerprint of data-file-1 */
 	evalPoly(buffer, numChar, w, a, f1);
-	
+
 	/* Open second file */
 	if((fp2 = fopen(argv[2], "r")) == NULL) {
 		fprintf(stderr, "Cannot open data-file-2\n");
@@ -123,7 +123,7 @@ int main(int argc, char *argv[]) {
 
 	/* Fingerprint of data-file-2 */
 	evalPoly(buffer, numChar, w, a, f2);
-	
+
 	/*
 	 * We have the following cases:
 	 * 	- f1[0] - f2[0] == 0 and f1[1] - f2[1] != 0: 1st was false positive 
@@ -136,7 +136,7 @@ int main(int argc, char *argv[]) {
 	} else {
 		printf("No");
 	}
-	
+
 	/* Cleanup */
 	free(buffer);
 
@@ -146,7 +146,7 @@ int main(int argc, char *argv[]) {
 inline unsigned long field(const unsigned long x) {
 	unsigned long tmp = (x >> 31) + (x & P);
 	return (tmp < P) ? tmp : tmp - P;
-} 
+}
 
 inline void init_mt(char *seed) {
 	char *pEnd; //!< Used to check if user seed is parsable
@@ -175,7 +175,7 @@ void setAW(unsigned long *a, unsigned long *w) {
 		nRandom = min;
 	}
 	uint32_t *rand = malloc(sizeof(uint32_t)*nRandom);
-	
+
 	/* Fill the array with 32-bit random uints */
 	sfmt_fill_array32(&sfmt, rand, nRandom);
 
@@ -198,7 +198,7 @@ inline void evalPoly(	const unsigned char *content,
 	int i = 0, c = 0;					//!< Index variable
 	unsigned long val0 = 1,val1 = 1;//<- Tmp. value of f1(w) and f2(w)
 	unsigned long tmp;				//<- Tmp. value of a*h and w-h
-	
+
 	/* Example string 0x6D7973 (mys in ASCII) */
 	while (c < numChar) {
 		/* Calclulate h(X), i.e. a line */
@@ -226,7 +226,7 @@ inline void evalPoly(	const unsigned char *content,
 		h[1] = 0;
 		i = 0;
 		/* Skip the new line just seen */
-		c++; 
+		c++;
 	}
 	val[0] = val0;	//<- We are done, update the values
 	val[1] = val1;
