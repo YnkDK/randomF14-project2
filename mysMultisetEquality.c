@@ -8,10 +8,11 @@
 
 sfmt_t sfmt; //!< SIMD-oriented Fast Mersenne Twister
 
-unsigned long field(const unsigned long x) {
-	unsigned long tmp = (x >> 31) + (x & P);
-	return (tmp < P) ? tmp : tmp - P;
-} 
+/**
+ * Basicly does x % P, but faster than the O3 compiler.
+ * Note that x must be smaller than 2*P
+ */
+unsigned long field(const unsigned long x);
 
 /**
  * Initilizes the Mersenne Twister with some truely random numbers,
@@ -37,10 +38,11 @@ void setAW(unsigned long *a, unsigned long *w);
  * Evaluates the univariate polynomial (w-h(x_1))(w-h(x_2))***(w-h(x_n)),
  * for both w[0] and w[1] and sets val[0] and val[1] accordingly 
  *
- * @param[in]	content		The content of a file (each line ends with '\n')
- * @param[in]	numChar		Number of characters in content
- * @param[in]	w			Variables for f(z), i.e. w[0] and w[1]
- * @param[in]	a			A list of random numbers in Fp of size 2*80
+ * @param[in]	content	The content of a file (each line ends with '\n')
+ * @param[in]	numChar	Number of characters in content
+ * @param[in]	w		Variables for f(z), i.e. w[0] and w[1]
+ * @param[in]	a		A list of random numbers in Fp of size 2*80
+ * @param[out]	val		A list of size two, containing the value of each polynomial
  */
 void evalPoly(	const unsigned char *content,
 				const long numChar,
@@ -140,6 +142,11 @@ int main(int argc, char *argv[]) {
 
 	return 0;
 }
+
+inline unsigned long field(const unsigned long x) {
+	unsigned long tmp = (x >> 31) + (x & P);
+	return (tmp < P) ? tmp : tmp - P;
+} 
 
 inline void init_mt(char *seed) {
 	char *pEnd; //!< Used to check if user seed is parsable
