@@ -40,7 +40,7 @@ else
 			RES=$(./"$PRG" "$DATA_A" "$DATA_B" "$SEED")
 			# Stop! Hammer time!
 			T="$(($(date +%s%N)-T))"
-			echo "$PRG $DATA_A $DATA_B $SEED $T $RES" >> "$3-$4.out"
+			echo "$PRG $DATA_A $DATA_B $SEED $T $RES" >> "$PRG-$3-$4.out"
 		done
 	done < "www.random.org"
 fi
