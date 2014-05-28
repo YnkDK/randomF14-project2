@@ -5,16 +5,14 @@
 #define NEW_LINE '\n'	//<- New line character
 #define P 2147483647UL	//!< 2^31 - 1 = 2147483647
 
+
 sfmt_t sfmt; //!< SIMD-oriented Fast Mersenne Twister
 
 /**
- * Maps a 64-bit unsigned long into the field P,
- * or basicly returns x % P in a fancy way.
- *
- * @param[in]	x	A 64-bit unsigned long
- * @return An unsigned long between 0 and P-1
+ * Basicly does x % P, but faster than the O3 compiler.
+ * Note that x must be smaller than 2*P
  */
-unsigned long field(unsigned long x);
+unsigned long field(const unsigned long x);
 
 /**
  * Initilizes the Mersenne Twister with some truely random numbers,
@@ -40,10 +38,11 @@ void setAW(unsigned long *a, unsigned long *w);
  * Evaluates the univariate polynomial (w-h(x_1))(w-h(x_2))***(w-h(x_n)),
  * for both w[0] and w[1] and sets val[0] and val[1] accordingly 
  *
- * @param[in]	content		The content of a file (each line ends with '\n')
- * @param[in]	numChar		Number of characters in content
- * @param[in]	w			Variables for f(z), i.e. w[0] and w[1]
- * @param[in]	a			A list of random numbers in Fp of size 2*80
+ * @param[in]	content	The content of a file (each line ends with '\n')
+ * @param[in]	numChar	Number of characters in content
+ * @param[in]	w		Variables for f(z), i.e. w[0] and w[1]
+ * @param[in]	a		A list of random numbers in Fp of size 2*80
+ * @param[out]	val		A list of size two, containing the value of each polynomial
  */
 void evalPoly(	const unsigned char *content,
 				const long numChar,
@@ -77,10 +76,10 @@ int main(int argc, char *argv[]) {
 	unsigned long a[2*80];		//!< mapping from 2^16 to Fp
 	unsigned long w[2];			//!< used to evaulate polynomial
 	unsigned long f1[2], f2[2];	//!< fingerprint of file 1 and 2
-	
+
 	/* Initialize Mersenne Twister */
 	init_mt(argv[3]);
-	
+
 	/* Initialize a and w */
 	setAW(a, w);
 
@@ -89,26 +88,26 @@ int main(int argc, char *argv[]) {
 		fprintf(stderr, "Cannot open data-file-1\n");
 		exit(1);
 	}
-	
+
 	/* Get the file size */
 	fseek(fp1, 0, SEEK_END);
 	fSize = ftell(fp1);
 	numChar = fSize/sizeof(unsigned char);
 	rewind(fp1);
-	
+
 	/* Read the whole file into buffer */
 	buffer = (unsigned char *) malloc(sizeof(unsigned char)*(fSize));
 	if(fread(buffer, sizeof(unsigned char), fSize, fp1) != fSize) {
 		fprintf(stderr, "Could not read data-file-1\n");
 		exit(1);
 	}
-	
+
 	/* Close data files (We are done with them!) */
 	fclose(fp1);
-	
+
 	/* Fingerprint of data-file-1 */
 	evalPoly(buffer, numChar, w, a, f1);
-	
+
 	/* Open second file */
 	if((fp2 = fopen(argv[2], "r")) == NULL) {
 		fprintf(stderr, "Cannot open data-file-2\n");
@@ -124,7 +123,7 @@ int main(int argc, char *argv[]) {
 
 	/* Fingerprint of data-file-2 */
 	evalPoly(buffer, numChar, w, a, f2);
-	
+
 	/*
 	 * We have the following cases:
 	 * 	- f1[0] - f2[0] == 0 and f1[1] - f2[1] != 0: 1st was false positive 
@@ -137,19 +136,15 @@ int main(int argc, char *argv[]) {
 	} else {
 		printf("No");
 	}
-	
+
 	/* Cleanup */
 	free(buffer);
 
 	return 0;
 }
 
-inline unsigned long field(unsigned long x) {
-	if(x == P) {
-		return 0;
-	}
-	unsigned long tmp = ((x) >> 31) + ((x) & P);
-	return ((tmp) >> 31) + ((tmp) & P);
+inline unsigned long field(const unsigned long x) {
+	return x % P;
 }
 
 inline void init_mt(char *seed) {
@@ -179,7 +174,7 @@ void setAW(unsigned long *a, unsigned long *w) {
 		nRandom = min;
 	}
 	uint32_t *rand = malloc(sizeof(uint32_t)*nRandom);
-	
+
 	/* Fill the array with 32-bit random uints */
 	sfmt_fill_array32(&sfmt, rand, nRandom);
 
@@ -199,24 +194,23 @@ inline void evalPoly(	const unsigned char *content,
 						unsigned long *val) {
 	unsigned long h[2] = {0, 0};	//!< Accumulated value of h
 	unsigned long s;				//!< Concatanation of c1 and c2 (block s)
-	int i = 0, c = 0;					//!< Index variable
+	int i = 0, c = 0;				//!< Index variable
 	unsigned long val0 = 1,val1 = 1;//<- Tmp. value of f1(w) and f2(w)
 	unsigned long tmp;				//<- Tmp. value of a*h and w-h
-	
-	/* Example string 0x6D7973 (mys in ASCII) */
+
+	/* Example string 0x6D7310 (ms\n in ASCII) */
 	while (c < numChar) {
 		/* Calclulate h(X), i.e. a line */
 		for(/*  */; content[c] != '\n'; c++) {
-			/* setAW = 0x6D00\n */
+			/* s = 0x6D00 */
 			s = content[c] << 8;
 			if(content[c + 1] != '\n') {
-				/* s = 0x6D79 */
+				/* s = 0x6D73 */
 				c++;
 				s |= content[c];
 			}
 			tmp = a[i    ] * s;
 			h[0] = field(field(tmp) + h[0]);
-
 			tmp = a[i + 1] * s;
 			h[1] = field(field(tmp) + h[1]);
 			i += 2;
@@ -226,13 +220,12 @@ inline void evalPoly(	const unsigned char *content,
 		val0 = field(tmp);
 		tmp = abs(w[1]-h[1]) * val1;
 		val1 = field(tmp);
-
 		/* Reset counters */
 		h[0] = 0;
 		h[1] = 0;
 		i = 0;
 		/* Skip the new line just seen */
-		c++; 
+		c++;
 	}
 	val[0] = val0;	//<- We are done, update the values
 	val[1] = val1;
