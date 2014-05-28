@@ -8,7 +8,8 @@ colnames(D) <- c("Program", "dataA", "dataB", "seed", "time", "response")
 D$time <- D$time/1000000.0
 D$n <- 10^as.numeric(gsub("\\D", "", D$dataA))
 D$Program <- factor(D$Program)
-
+# Remove top 5% outliers
+D <- D[which(D$time <= quantile(D$time, 0.95)),]
 # Set output file
 pdf("graphs.pdf", width=11.7, height=8.3)
 par(mar=c(5,3,2,2)+0.1)
@@ -23,6 +24,7 @@ dataPlot <- xyplot(time ~ n,
                                  y = list(log = FALSE)),
                    xlab = "n", 
                    ylab = "Time (ms)",
+                   ylim = c(0, 4500),
                    auto.key = TRUE)
 
 print(dataPlot, width=200)
